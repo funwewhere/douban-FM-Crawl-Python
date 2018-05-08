@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding:utf-8 -*-
-import urllib,json
-import urllib2
+import urllib,json,os,sys
+import urllib2,re
 import cookielib
 import gzip, StringIO
 
@@ -33,8 +33,8 @@ loginPostData = {
     'source': 'fm',
     'referer': 'https://douban.fm/',
     'ck': None,
-    'name': 'funwewhere@foxmail.com',
-    'password': '478505231dou',
+    'name': None,
+    'password': None,
     'captcha_solution': None,
     'captcha_id': None,
     'remember': 'on'
@@ -52,6 +52,14 @@ def sendRequest(request):
     return result
 
 
+def Schedule(a,b,c):
+    rate = 1.0 * a * b / c
+    rate_num = int(rate * 100)
+    number = int(50 * rate)
+    r = '\r[%s%s]%d%%' % ("=" * number, " " * (50 - number), rate_num)
+    print "\r {}".format(r),
+
+
 if __name__ == '__main__':
     def domain_match(path, request):
         return True
@@ -59,30 +67,39 @@ if __name__ == '__main__':
     cookie = cookielib.CookieJar()
     cookie._policy.domain_return_ok = domain_match
     cookie._policy.return_ok_domain = domain_match
-
     cookieHandle = urllib2.HTTPCookieProcessor(cookie)
     opener = urllib2.build_opener(cookieHandle)
     urllib2.install_opener(opener)
-
-    # try:
+    print 'please input douban account info'
+    loginPostData['name'] = raw_input("username: ")
+    loginPostData['password'] = raw_input("password: ")
     sendRequest(urllib2.Request(hostUrl))
     sendRequest(urllib2.Request(loginUrl, urllib.urlencode(loginPostData), headers))
     sendRequest(urllib2.Request(getCookieUrl, headers=headers))
     sendRequest(urllib2.Request(getCookieUrl2, headers=headers))
     responseData = sendRequest(urllib2.Request(getSongsInfoUrl, headers=headers2))
     data = json.loads(responseData)
-
     songsInfos = [t['sid'] for t in data['songs']]
+    if not 'Y' == raw_input('you have ' + str(len(songsInfos)) + ' songs, Do you want to download? Y/N:'):
+        print('exit!')
+        sys.exit(0)
     postData = {
         'sids' : "|".join(songsInfos),
         'kbps': '320',
         'ck': [c.value for c in cookie if c.name == 'ck'][0]
     }
     responseData = sendRequest(urllib2.Request(getSongsLinkUrl, urllib.urlencode(postData), headers2))
-    data = json.loads(responseData)
+    data = json.loads(unicode(responseData, "utf-8"))
+    for item in data:
+        i = 1
+        fileSavePath = item['artist'] + ' - ' + item['title'] + item['url'][item['url'].rfind('.'):len(item['url'])]
+        while os.path.exists(fileSavePath):
+            fileSavePath = fileSavePath = item['artist'] + ' - ' + item['title'] + ' - ' + str(i) + item['url'][item['url'].rfind('.'):len(item['url'])]
+            i += 1
 
-    for arr in data[0]:
-        print arr,data[0][arr]
+        fileSavePath = re.sub('[\\\\\/:*?"<>|]', '-', fileSavePath)
+        print 'start download [%s][%s]' % (fileSavePath, item['url'])
+        urllib.urlretrieve(item['url'], fileSavePath, Schedule)
+        print ''
 
-    for t in [{'title': t['title'], 'albumtitle':t['albumtitle'], 'album':t['album'], 'url': t['url']} for t in data]:
-        print t
+    print 'done!'
