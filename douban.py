@@ -2,7 +2,7 @@
 # -*- coding:utf-8 -*-
 import urllib,json,os,sys
 import urllib2,re
-import cookielib
+import cookielib,threading
 import gzip, StringIO
 
 hostUrl = 'https://douban.fm'
@@ -58,48 +58,62 @@ def Schedule(a,b,c):
     number = int(50 * rate)
     r = '\r[%s%s]%d%%' % ("=" * number, " " * (50 - number), rate_num)
     print "\r {}".format(r),
-
-
-if __name__ == '__main__':
+    
+def initCookieHandle():
     def domain_match(path, request):
         return True
-
     cookie = cookielib.CookieJar()
     cookie._policy.domain_return_ok = domain_match
     cookie._policy.return_ok_domain = domain_match
     cookieHandle = urllib2.HTTPCookieProcessor(cookie)
     opener = urllib2.build_opener(cookieHandle)
     urllib2.install_opener(opener)
+    return cookie
+
+def main():
+    cookie = initCookieHandle();
+
     print 'please input douban account info'
     loginPostData['name'] = raw_input("username: ")
     loginPostData['password'] = raw_input("password: ")
+
     sendRequest(urllib2.Request(hostUrl))
     sendRequest(urllib2.Request(loginUrl, urllib.urlencode(loginPostData), headers))
     sendRequest(urllib2.Request(getCookieUrl, headers=headers))
     sendRequest(urllib2.Request(getCookieUrl2, headers=headers))
+
     responseData = sendRequest(urllib2.Request(getSongsInfoUrl, headers=headers2))
     data = json.loads(responseData)
     songsInfos = [t['sid'] for t in data['songs']]
+
     if not 'Y' == raw_input('you have ' + str(len(songsInfos)) + ' songs, Do you want to download? Y/N:'):
         print('exit!')
         sys.exit(0)
+
+    savePath = raw_input("please input the path you want to save music file(like D:/Downloads or /usr/local):")
+    if (len(savePath)>0 and not (savePath.endswith("/") or savePath.endswith("\\"))):
+        savePath = savePath +'/'
+
     postData = {
-        'sids' : "|".join(songsInfos),
+        'sids': "|".join(songsInfos),
         'kbps': '320',
         'ck': [c.value for c in cookie if c.name == 'ck'][0]
     }
     responseData = sendRequest(urllib2.Request(getSongsLinkUrl, urllib.urlencode(postData), headers2))
     data = json.loads(unicode(responseData, "utf-8"))
+
     for item in data:
         i = 1
-        fileSavePath = item['artist'] + ' - ' + item['title'] + item['url'][item['url'].rfind('.'):len(item['url'])]
-        while os.path.exists(fileSavePath):
-            fileSavePath = fileSavePath = item['artist'] + ' - ' + item['title'] + ' - ' + str(i) + item['url'][item['url'].rfind('.'):len(item['url'])]
+        fileSaveName = item['artist'] + ' - ' + item['title'] + item['url'][item['url'].rfind('.'):len(item['url'])]
+        while os.path.exists(savePath + fileSaveName):
+            fileSaveName = fileSaveName = item['artist'] + ' - ' + item['title'] + ' - ' + str(i) + item['url'][item['url'].rfind('.'):len(item['url'])]
             i += 1
-
-        fileSavePath = re.sub('[\\\\\/:*?"<>|]', '-', fileSavePath)
-        print 'start download [%s][%s]' % (fileSavePath, item['url'])
-        urllib.urlretrieve(item['url'], fileSavePath, Schedule)
+        fileSaveName = re.sub('[\\\\\/:*?"<>|]', '-', fileSaveName)
+        print 'start download [%s][%s]' % (fileSaveName, item['url'])
+        urllib.urlretrieve(item['url'], savePath + fileSaveName, Schedule)
         print ''
 
     print 'done!'
+
+if __name__ == '__main__':
+    main()
