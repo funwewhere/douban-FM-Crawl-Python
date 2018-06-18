@@ -102,18 +102,28 @@ def main():
     responseData = sendRequest(urllib2.Request(getSongsLinkUrl, urllib.urlencode(postData), headers2))
     data = json.loads(unicode(responseData, "utf-8"))
 
+    failDownloadSongs = [];
+
     for item in data:
         i = 1
         fileSaveName = item['artist'] + ' - ' + item['title'] + item['url'][item['url'].rfind('.'):len(item['url'])]
         while os.path.exists(savePath + fileSaveName):
             fileSaveName = fileSaveName = item['artist'] + ' - ' + item['title'] + ' - ' + str(i) + item['url'][item['url'].rfind('.'):len(item['url'])]
             i += 1
-        fileSaveName = re.sub('[\\\\\/:*?"<>|]', '-', fileSaveName)
-        print 'start download [%s][%s]' % (fileSaveName, item['url'])
-        urllib.urlretrieve(item['url'], savePath + fileSaveName, Schedule)
-        print ''
+        item['fileSaveName'] = re.sub('[\\\\\/:*?"<>|]', '-', fileSaveName)
+        print 'start download [%s][%s]' % (item['fileSaveName'], item['url'])
+        try:
+            urllib.urlretrieve(item['url'], savePath + item['fileSaveName'], Schedule)
+            print ''
+        except:
+            failDownloadSongs.append(item)
+            print 'fail to download [' + item['fileSaveName'] + '] url [' + item['url'] + ']'
 
     print 'done!'
+    
+    if (len(failDownloadSongs)>0):
+        for item in failDownloadSongs:
+            print item['fileSaveName'] + ', ' + item['url']
 
 if __name__ == '__main__':
     main()
